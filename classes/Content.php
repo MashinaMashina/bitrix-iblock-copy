@@ -30,6 +30,9 @@ class Content
             if (! empty($arSection['PICTURE'])) {
                 $arSection['PICTURE'] = \CFile::MakeFileArray($arSection['PICTURE']);
             }
+            if (! empty($arSection['DETAIL_PICTURE'])) {
+                $arSection['DETAIL_PICTURE'] = \CFile::MakeFileArray($arSection['DETAIL_PICTURE']);
+            }
 
             // этот раздел уже скопирован в данный инфоблок
             if (isset($this->sections[$toIblockId][$oldId])) {
@@ -116,6 +119,13 @@ class Content
             }
 
             unset($data['TIMESTAMP_X'], $data['TIMESTAMP_X_UNIX'], $data['DATE_CREATE'], $data['DATE_CREATE_UNIX']);
+
+            if (! empty($data['PREVIEW_PICTURE'])) {
+                $data['PREVIEW_PICTURE'] = \CFile::MakeFileArray($data['PREVIEW_PICTURE']);
+            }
+            if (! empty($data['DETAIL_PICTURE'])) {
+                $data['DETAIL_PICTURE'] = \CFile::MakeFileArray($data['DETAIL_PICTURE']);
+            }
 
             $elementId = $CIBlockElement->Add($data);
 
