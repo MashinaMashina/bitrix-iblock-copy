@@ -4,7 +4,7 @@
  * Копируем инфоблок, разделы и элементы
  */
 
-if (!isset($_SERVER['DOCUMENT_ROOT'])) {
+if (empty($_SERVER['DOCUMENT_ROOT'])) {
     $_SERVER['DOCUMENT_ROOT'] = dirname(__DIR__);
 }
 
@@ -27,7 +27,8 @@ $content = new Content;
 if (! file_exists(__DIR__ . '/to_iblock.tmp')) {
     $structure = new Structure;
     // берем инфоблок
-    $structure->load($fromIblockId);
+    $structure->loadId($fromIblockId);
+
     // меняем ему тип. Так как инфоблока с таким ID и типом уже нет, он создается заново
     $structure->iblock['IBLOCK_TYPE_ID'] = $toIblockType;
     $structure->save();

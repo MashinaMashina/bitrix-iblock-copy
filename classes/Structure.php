@@ -7,13 +7,14 @@ class Structure
     public $properties = [];
     public $permissions = [];
     public $sites = [];
+    public $uf_fields = [];
 
     public function __construct()
     {
         \CModule::IncludeModule('iblock');
     }
 
-    public function load($iblockId)
+    public function loadId($iblockId)
     {
         $this->iblock = \CIBlock::GetByID($iblockId)->fetch();
 
@@ -35,6 +36,14 @@ class Structure
 
         $this->fields = \CIBlock::GetFields($iblockId);
         $this->permissions = \CIBlock::GetGroupPermissions($iblockId);
+
+        $res = \CUserTypeEntity::GetList([], [
+            'ENTITY_ID' => 'IBLOCK_'.$iblockId.'_SECTION'
+        ]);
+
+        while ($uf = $res->fetch()) {
+            $this->uf_fields[] = $uf;
+        }
 
         return true;
     }
@@ -88,11 +97,20 @@ class Structure
             $this->properties[$k]['ID'] = $id;
         }
 
+        $CUserTypeEntity = new CUserTypeEntity;
+        foreach ($this->uf_fields as $uf) {
+            unset($uf['ID']);
+            $uf['ENTITY_ID'] = preg_replace('#IBLOCK_\d+#', 'IBLOCK_' . $this->iblock['ID'], $uf['ENTITY_ID']);
+
+            $CUserTypeEntity->add($uf);
+        }
         return true;
     }
 
     protected function saveIblockDiff($oldIblock)
     {
+        echo 'I can\'t keep the difference';
+        die(__FILE__ . '::' . __LINE__);
         $iblockId = $this->iblock['ID'];
         $oldIblockId = $oldIblock['ID'];
 

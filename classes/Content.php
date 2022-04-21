@@ -9,6 +9,8 @@ class Content
     protected $idFile;
     protected $sectionsFile;
 
+    protected $fileFields;
+
     public function __construct()
     {
         \CModule::IncludeModule('iblock');
@@ -21,18 +23,11 @@ class Content
     {
         $this->loadSections();
 
-        $res = \CIBlockSection::GetList(['DEPTH_LEVEL' => 'ASC'], $arFilter, false, []);
+        $res = \CIBlockSection::GetList(['DEPTH_LEVEL' => 'ASC'], $arFilter, false, ['*', 'UF_*']);
 
         $CIBlockSection = new CIBlockSection;
         while ($arSection = $res->Fetch()) {
             $oldId = $arSection['ID'];
-
-            if (! empty($arSection['PICTURE'])) {
-                $arSection['PICTURE'] = \CFile::MakeFileArray($arSection['PICTURE']);
-            }
-            if (! empty($arSection['DETAIL_PICTURE'])) {
-                $arSection['DETAIL_PICTURE'] = \CFile::MakeFileArray($arSection['DETAIL_PICTURE']);
-            }
 
             // этот раздел уже скопирован в данный инфоблок
             if (isset($this->sections[$toIblockId][$oldId])) {
@@ -42,6 +37,12 @@ class Content
             unset($arSection['ID'], $arSection['TIMESTAMP_X'], $arSection['LEFT_MARGIN'], $arSection['RIGHT_MARGIN'], $arSection['DEPTH_LEVEL'], $arSection['TMP_ID']);
 
             $arSection['IBLOCK_ID'] = $toIblockId;
+
+            foreach ($arSection as $k => $v) {
+                if (!empty($v) and $this->isFileField($k, $toIblockId)) {
+                    $arSection[$k] = \CFile::MakeFileArray($v);
+                }
+            }
 
             if (! empty($arSection['IBLOCK_SECTION_ID'])) {
                 $arSection['IBLOCK_SECTION_ID'] = $this->sections[$toIblockId][$arSection['IBLOCK_SECTION_ID']];
@@ -127,6 +128,14 @@ class Content
                 $data['DETAIL_PICTURE'] = \CFile::MakeFileArray($data['DETAIL_PICTURE']);
             }
 
+            foreach ($arItem['PROPERTIES'] as $prop) {
+                if ($prop['PROPERTY_TYPE'] === 'F') {
+                    $prop['VALUE'] = \CFile::MakeFileArray($prop['VALUE']);
+                }
+
+                $data['PROPERTY_VALUES'][$prop['CODE']] = $prop['VALUE'];
+            }
+
             $elementId = $CIBlockElement->Add($data);
 
             if (!$elementId) {
@@ -139,6 +148,28 @@ class Content
         }
 
         return $res->SelectedRowsCount();
+    }
+
+    public function isFileField($name, $iblockId)
+    {
+        if (! isset($this->fileFields[$iblockId])) {
+            $this->fileFields[$iblockId] = [
+                'PICTURE',
+                'DETAIL_PICTURE',
+            ];
+
+            $res = \CUserTypeEntity::GetList([], [
+                'ENTITY_ID' => 'IBLOCK_'.$iblockId.'_SECTION'
+            ]);
+
+            while ($uf = $res->fetch()) {
+                if ($uf['USER_TYPE_ID'] === 'file') {
+                    $this->fileFields[$iblockId][] = $uf['FIELD_NAME'];
+                }
+            }
+        }
+
+        return in_array($name, $this->fileFields[$iblockId]);
     }
 
     public function clear()
@@ -178,4 +209,5 @@ class Content
     {
         file_put_contents($this->sectionsFile, json_encode($this->sections));
     }
+
 }
