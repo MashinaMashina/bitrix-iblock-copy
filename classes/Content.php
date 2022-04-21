@@ -128,12 +128,33 @@ class Content
                 $data['DETAIL_PICTURE'] = \CFile::MakeFileArray($data['DETAIL_PICTURE']);
             }
 
+            $props = [];
             foreach ($arItem['PROPERTIES'] as $prop) {
-                if ($prop['PROPERTY_TYPE'] === 'F') {
-                    $prop['VALUE'] = \CFile::MakeFileArray($prop['VALUE']);
+                if (empty($prop['~VALUE'])) {
+                    continue;
                 }
 
-                $data['PROPERTY_VALUES'][$prop['CODE']] = $prop['VALUE'];
+                if (is_array($prop['VALUE'])) {
+                    foreach ($prop['~VALUE'] as $k => $val) {
+                        if ($prop['PROPERTY_TYPE'] === 'F') {
+                            $props[$prop['CODE']][] = \CFile::MakeFileArray($val);
+                        } else {
+                            $props[$prop['CODE']][] = [
+                                'VALUE' => $val,
+                                'DESCRIPTION' => $prop['~DESCRIPTION'][$k],
+                            ];
+                        }
+                    }
+                } else {
+                    if ($prop['PROPERTY_TYPE'] === 'F') {
+                        $props[$prop['CODE']] = \CFile::MakeFileArray($prop['~VALUE']);
+                    } else {
+                        $props[$prop['CODE']] = [
+                            'VALUE' => $prop['~VALUE'],
+                            'DESCRIPTION' => $prop['~DESCRIPTION'],
+                        ];
+                    }
+                }
             }
 
             $elementId = $CIBlockElement->Add($data);
@@ -142,6 +163,8 @@ class Content
                 echo __FILE__ . '::' . __LINE__ . ' - '. $CIBlockElement->LAST_ERROR . PHP_EOL;
                 return false;
             }
+
+            \CIBlockElement::SetPropertyValues($elementId, $toIblockId, $props);
 
             $this->lastContentId = $oldElementId;
             $this->saveContentId();
