@@ -8,6 +8,7 @@ class Structure
     public $permissions = [];
     public $sites = [];
     public $uf_fields = [];
+    public $lists;
 
     public function __construct()
     {
@@ -23,12 +24,27 @@ class Structure
             return false;
         }
 
-        $res = \CIBlock::GetProperties($iblockId);
+        $res = \CIBlock::GetProperties($iblockId, [], [
+            'CHECK_PERMISSIONS' => 'N',
+        ]);
         while ($prop = $res->fetch()) {
             $code = empty($prop['CODE']) ? $prop['ID'] : $prop['CODE'];
 
+            if ($prop['PROPERTY_TYPE'] === 'L') {
+                $res2 = \CIBlockPropertyEnum::GetList([], [
+                    'IBLOCK_ID' => $iblockId,
+                    'PROPERTY_ID' => $prop['ID'],
+                ]);
+
+                $prop['LIST'] = [];
+                while ($item = $res2->fetch()) {
+                    $prop['LIST'][] = $item;
+                }
+            }
+
             $this->properties[$code] = $prop;
         }
+
         $res = \CIBlock::GetSite($iblockId);
         while ($site = $res->fetch()) {
             $this->sites[] = $site['SITE_ID'];
@@ -86,12 +102,39 @@ class Structure
         foreach ($this->properties as $k => $property) {
             unset($property['ID'], $property['TIMESTAMP_X']);
 
+            $list = [];
+            if ($property['PROPERTY_TYPE'] === 'L') {
+                $list = $property['LIST'];
+                unset($property['LIST']);
+            }
+
             $property['IBLOCK_ID'] = $this->iblock['ID'];
             $propId = $CIBlockProperty->Add($property);
 
             if (!$propId) {
                 echo __FILE__ . '::' . __LINE__ . ' - '. $CIBlockProperty->LAST_ERROR . PHP_EOL;
                 return false;
+            }
+
+            if (count($list)) {
+                $CIBlockPropertyEnum = new \CIBlockPropertyEnum;
+                foreach ($list as $value) {
+                    $valueId = $CIBlockPropertyEnum->add([
+                       'PROPERTY_ID' => $propId,
+                       'VALUE' => $value['VALUE'],
+                       'XML_ID' => $value['XML_ID'],
+                       'SORT' => $value['SORT'],
+                       'EXTERNAL_ID' => $value['EXTERNAL_ID'],
+                    ]);
+
+                    if (!$valueId) {
+                        echo __FILE__ . '::' . __LINE__ . ' - '. $CIBlockPropertyEnum->LAST_ERROR . PHP_EOL;
+                        return false;
+                    }
+
+                    $this->loadLists();
+                    $this->lists[$value['ID']] = $valueId;
+                }
             }
 
             $this->properties[$k]['ID'] = $id;
@@ -104,7 +147,28 @@ class Structure
 
             $CUserTypeEntity->add($uf);
         }
+
+        $this->saveLists();
         return true;
+    }
+
+    protected function loadLists()
+    {
+        if (! isset($this->lists)) {
+            $file = __DIR__ .'/../lists.tmp';
+            if (file_exists($file)) {
+                $this->lists = json_decode(file_get_contents($file), true);
+            } else {
+                $this->lists = [];
+            }
+        }
+    }
+
+    protected function saveLists()
+    {
+        if (is_array($this->lists) and count($this->lists)) {
+            file_put_contents(__DIR__ .'/../lists.tmp', json_encode($this->lists));
+        }
     }
 
     protected function saveIblockDiff($oldIblock)

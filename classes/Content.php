@@ -10,6 +10,7 @@ class Content
     protected $sectionsFile;
 
     protected $fileFields;
+    protected $enum_lists;
 
     public function __construct()
     {
@@ -73,10 +74,13 @@ class Content
         $this->loadSections();
         $this->loadContentId();
 
+        $startTime = time();
+
         $i = 0;
         while ($n = $this->copyElementsChunk($arFilter, $toIblockId, $chunkSize)){
             $i += $n;
-            echo "Copied: $i elements\n";
+            $spent = time() - $startTime;
+            echo "Copied: $i elements; Time spent: $spent sec\n";
         }
 
         if ($i === 0) {
@@ -139,6 +143,10 @@ class Content
                         if ($prop['PROPERTY_TYPE'] === 'F') {
                             $props[$prop['CODE']][] = \CFile::MakeFileArray($val);
                         } else {
+                            if($prop['PROPERTY_TYPE'] === 'L') {
+                                $val = $this->replaceEnum($prop['VALUE_ENUM_ID'][$k], $toIblockId);
+                            }
+
                             $props[$prop['CODE']][] = [
                                 'VALUE' => $val,
                                 'DESCRIPTION' => $prop['~DESCRIPTION'][$k],
@@ -149,6 +157,10 @@ class Content
                     if ($prop['PROPERTY_TYPE'] === 'F') {
                         $props[$prop['CODE']] = \CFile::MakeFileArray($prop['~VALUE']);
                     } else {
+                        if($prop['PROPERTY_TYPE'] === 'L') {
+                            $prop['~VALUE'] = $this->replaceEnum($prop['VALUE_ENUM_ID'], $toIblockId);
+                        }
+
                         $props[$prop['CODE']] = [
                             'VALUE' => $prop['~VALUE'],
                             'DESCRIPTION' => $prop['~DESCRIPTION'],
@@ -173,26 +185,57 @@ class Content
         return $res->SelectedRowsCount();
     }
 
+    public function isEnumField($name, $iblockId)
+    {
+        $this->loadUfFields($iblockId);
+
+        return $this->uf_types[$iblockId][$name] === 'enum';
+    }
+
     public function isFileField($name, $iblockId)
     {
-        if (! isset($this->fileFields[$iblockId])) {
-            $this->fileFields[$iblockId] = [
-                'PICTURE',
-                'DETAIL_PICTURE',
-            ];
+        $this->loadUfFields($iblockId);
+
+        return $this->uf_types[$iblockId][$name] === 'file';
+    }
+
+    protected function loadUfFields($iblockId)
+    {
+        if (! isset($this->uf_types[$iblockId])) {
+            $this->uf_types[$iblockId]['PICTURE'] = 'file';
+            $this->uf_types[$iblockId]['DETAIL_PICTURE'] = 'file';
 
             $res = \CUserTypeEntity::GetList([], [
                 'ENTITY_ID' => 'IBLOCK_'.$iblockId.'_SECTION'
             ]);
 
             while ($uf = $res->fetch()) {
-                if ($uf['USER_TYPE_ID'] === 'file') {
-                    $this->fileFields[$iblockId][] = $uf['FIELD_NAME'];
-                }
+                $this->uf_types[$iblockId][$uf['FIELD_NAME']] = $uf['USER_TYPE_ID'];
             }
         }
+    }
 
-        return in_array($name, $this->fileFields[$iblockId]);
+    protected function replaceEnum($val, $iblockId)
+    {
+        $this->loadLists($iblockId);
+
+        if (isset($this->enum_lists[$val])) {
+            return $this->enum_lists[$val];
+        }
+
+        return $val;
+    }
+
+    protected function loadLists($iblockId)
+    {
+        if (! isset($this->enum_lists)) {
+            $file = __DIR__ .'/../lists.tmp';
+            if (file_exists($file)) {
+                $this->enum_lists = json_decode(file_get_contents($file), true);
+            } else {
+                $this->enum_lists = [];
+            }
+        }
     }
 
     public function clear()
